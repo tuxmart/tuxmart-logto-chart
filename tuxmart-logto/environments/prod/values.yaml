@@ -1,0 +1,105 @@
+# Production values for tuxmart-logto
+
+replicaCount: 1
+
+image:
+  tag: "1.7.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  loadBalancerIP: "192.168.1.200"
+  annotations:
+    metallb.universe.tf/address-pool: local-pool
+  targetPort: 3001
+  containerPort: 3001
+  ports:
+    - name: http-main
+      port: 3001
+      targetPort: 3001
+    - name: http-admin
+      port: 3002
+      targetPort: 3002
+
+logto:
+  trustProxyHeader: true
+  env:
+    LOGTO_COOKIE_SECURE: "true"
+    LOGTO_COOKIE_SAME_SITE: "lax"
+    LOGTO_RATE_LIMIT_ENABLED: "true"
+    LOGTO_RATE_LIMIT_WINDOW: "15m"
+    LOGTO_RATE_LIMIT_MAX: "100"
+    DB_AUTO_MIGRATE: "true"
+
+externalDatabase:
+  enabled: true
+  host: "prod-pg-primary.tuxmart.com"
+  port: 5432
+  username: "logto_prod"
+  password: ""
+  database: "logto_prod"
+  ssl: true
+  sslMode: "require"
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 2
+
+networkPolicy:
+  enabled: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+sidecar:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: alpine/socat
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  ports:
+    - name: http-main
+      listenPort: 3011
+      targetPort: 3001
+    - name: http-admin
+      listenPort: 3012
+      targetPort: 3002
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi

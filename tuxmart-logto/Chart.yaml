@@ -1,0 +1,14 @@
+apiVersion: v2
+name: tuxmart-logto
+description: A Helm chart for Logto Identity Service with external PostgreSQL and MetalLB support
+type: application
+version: 0.1.0
+appVersion: "1.7.0"
+keywords:
+- logto
+- identity
+- authentication
+- oauth
+maintainers:
+- name: Tuxmart Team
+  email: devops@tuxmart.com

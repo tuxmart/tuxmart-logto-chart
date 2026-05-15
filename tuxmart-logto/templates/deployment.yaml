@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tuxmart-logto.fullname" . }}
+  labels:
+    {{- include "tuxmart-logto.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "tuxmart-logto.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "tuxmart-logto.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "tuxmart-logto.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: wait-for-db
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'timeout 60 sh -c "until pg_isready -h {{ include "tuxmart-logto.databaseHost" . }} -p {{ include "tuxmart-logto.databasePort" . }} -U {{ include "tuxmart-logto.databaseUsername" . }} -d {{ include "tuxmart-logto.databaseName" . }}; do echo waiting for database; sleep 2; done" || exit 1']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      containers:
+        - name: {{ .Chart.Name }}
+          command: ['sh', '-c', 'npm run cli db seed -- --swe && npm start']
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.containerPort }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: TRUST_PROXY_HEADER
+              value: {{ .Values.logto.trustProxyHeader | quote }}
+            - name: DB_URL
+              value: {{ include "tuxmart-logto.databaseUrl" . | quote }}
+            - name: ENDPOINT
+              value: {{ include "tuxmart-logto.endpoint" . | quote }}
+            - name: ADMIN_ENDPOINT
+              value: {{ include "tuxmart-logto.adminEndpoint" . | quote }}
+            {{- range $key, $value := .Values.logto.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range .Values.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: alteration-scripts
+              mountPath: /etc/logto/packages/cli/alteration-scripts
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+        {{- if .Values.sidecar.enabled }}
+        {{- range .Values.sidecar.ports }}
+        - name: network-bridge-{{ .name }}
+          image: "{{ $.Values.sidecar.image.registry }}/{{ $.Values.sidecar.image.repository }}:{{ $.Values.sidecar.image.tag }}"
+          imagePullPolicy: {{ $.Values.sidecar.image.pullPolicy }}
+          command: ["socat", "TCP-LISTEN:{{ .listenPort }},fork,reuseaddr", "TCP:127.0.0.1:{{ .targetPort }}"]
+          ports:
+            - name: sidecar
+              containerPort: {{ .listenPort }}
+              protocol: TCP
+          securityContext:
+            {{- toYaml $.Values.sidecar.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml $.Values.sidecar.resources | nindent 12 }}
+        {{- end }}
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: alteration-scripts
+          emptyDir: {}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

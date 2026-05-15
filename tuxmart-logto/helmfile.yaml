@@ -1,0 +1,35 @@
+releases:
+- name: tuxmart-logto
+  namespace: {{ env "KUBE_NAMESPACE" | default "tuxmart" }}
+  chart: ./
+  values:
+  - environments/prod/values.yaml
+  set:
+  # Logto image
+  - name: image.registry
+    value: {{ env "LOGTO_IMAGE_REGISTRY" | default "ghcr.io" }}
+  - name: image.repository
+    value: {{ env "LOGTO_IMAGE_REPOSITORY" | default "logto-io/logto" }}
+  - name: image.tag
+    value: {{ requiredEnv "TUXMART_LOGTO_TAG" }}
+  # Service
+  - name: service.loadBalancerIP
+    value: {{ requiredEnv "TUXMART_LOGTO_IP" }}
+  # Logto endpoints
+  - name: logto.endpoint
+    value: {{ env "LOGTO_ENDPOINT" | default "" }}
+  - name: logto.adminEndpoint
+    value: {{ env "LOGTO_ADMIN_ENDPOINT" | default "" }}
+  # External database
+  - name: externalDatabase.host
+    value: {{ requiredEnv "DATABASE_HOST" }}
+  - name: externalDatabase.port
+    value: {{ env "DATABASE_PORT" | default "5432" }}
+  - name: externalDatabase.username
+    value: {{ requiredEnv "DATABASE_USER" }}
+  - name: externalDatabase.password
+    value: {{ requiredEnv "DATABASE_PASSWORD" }}
+  - name: externalDatabase.database
+    value: {{ env "DATABASE_NAME" | default "logto" }}
+  - name: externalDatabase.ssl
+    value: {{ env "DATABASE_SSL" | default "false" }}

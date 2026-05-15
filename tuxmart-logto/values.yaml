@@ -1,0 +1,215 @@
+# Default values for tuxmart-logto
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Replica Settings --
+replicaCount: 2
+
+# -- Image Configuration --
+image:
+  repository: logto
+  registry: ghcr.io
+  tag: "1.7.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# -- Service Configuration --
+service:
+  type: LoadBalancer
+  loadBalancerIP: ""
+  annotations: {}
+  targetPort: 3001
+  containerPort: 3001
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3001
+
+# -- Ingress Configuration --
+# Note: Ingress is optional. Use service.type=LoadBalancer for production.
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: logto.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# -- External Database Configuration --
+# For production, use external PostgreSQL. For development, can use embedded.
+externalDatabase:
+  enabled: true
+  host: ""
+  port: 5432
+  username: "logto"
+  password: ""
+  database: "logto"
+  ssl: true
+  sslMode: "require"
+
+# -- PostgreSQL Embedded (for development only) --
+# Not recommended for production - use externalDatabase instead
+postgresql:
+  enabled: false
+  image:
+    repository: postgres
+    tag: "17-alpine"
+  auth:
+    username: "postgres"
+    password: "postgres"
+    database: "logto"
+  service:
+    port: 5432
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 512Mi
+  persistence:
+    enabled: false
+    size: 8Gi
+
+# -- Logto Application Configuration --
+logto:
+  trustProxyHeader: true
+  endpoint: "https://logto.example.com"
+  adminEndpoint: "https://logto.example.com/admin"
+  env: {}
+
+# -- Resource Configuration --
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# -- Autoscaling Configuration --
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# -- Pod Disruption Budget --
+pdb:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+# -- Network Policies --
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tuxmart-logto
+      ports:
+        - port: 3001
+          protocol: TCP
+
+# -- Pod Security Context --
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: "OnRootMismatch"
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container Security Context --
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  privileged: false
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+
+# -- Pod Affinity/Anti-Affinity --
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - tuxmart-logto
+          topologyKey: kubernetes.io/hostname
+
+# -- Topology Spread Constraints --
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: tuxmart-logto
+
+# -- Priority Class --
+priorityClassName: "medium-priority"
+
+# -- Node Selector --
+nodeSelector: {}
+
+# -- Tolerations --
+tolerations: []
+
+# -- Service Account --
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# -- Pod Annotations --
+podAnnotations: {}
+
+# -- Extra Environment Variables --
+extraEnv: []
+
+# -- Extra Volumes --
+extraVolumes: []
+
+# -- Sidecar Configuration --
+sidecar:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: alpine/socat
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  ports:
+    - name: http-main
+      listenPort: 3011
+      targetPort: 3001
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+
+# -- Extra Volume Mounts --
+extraVolumeMounts: []
